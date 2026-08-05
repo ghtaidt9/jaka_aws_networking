@@ -22,7 +22,7 @@ resource "aws_subnet" "public_1" {
     map_public_ip_on_launch = true
 
     tags = {
-        Name = "${local.name_prefix}-public-1a"
+        Name = "${local.name_prefix}-public-1"
         Tier = "public"
     }
 }
@@ -37,7 +37,7 @@ resource "aws_subnet" "public_2" {
     map_public_ip_on_launch = true
 
     tags = {
-        Name = "${local.name_prefix}-public-1b"
+        Name = "${local.name_prefix}-public-2"
         Tier = "public"
     }
 }
@@ -53,7 +53,7 @@ resource "aws_subnet" "private_1" {
     availability_zone = var.az1
 
     tags = {
-        Name = "${local.name_prefix}-private-1a"
+        Name = "${local.name_prefix}-private-1"
         Tier = "private"
     }
 }
@@ -67,7 +67,7 @@ resource "aws_subnet" "private_2" {
     availability_zone = var.az2
 
     tags = {
-        Name = "${local.name_prefix}-private-1b"
+        Name = "${local.name_prefix}-private-2"
         Tier = "private"
     }
 }
