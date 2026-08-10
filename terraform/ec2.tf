@@ -1,0 +1,41 @@
+###############################################
+# Latest Amazon Linux 2023 AMI
+###############################################
+
+data "aws_ami" "amazon_linux" {
+    most_recent = true
+    owners = ["amazon"]
+    filter {
+        name = "name"
+        values = ["al2023-ami-*-x86_64"]
+    }
+
+    filter {
+        name = "virtualization-type"
+        values = ["hvm"]
+    }
+
+    filter {
+        name = "architecture"
+        values = ["x86_64"]
+    }
+}
+
+###############################################
+# EC2 Instance
+###############################################
+
+resource "aws_instance" "app" {
+    ami             = data.aws_ami.amazon_linux.id
+    instance_type   = var.instance_type
+
+    subnet_id       = aws_subnet.private_1.id
+
+    vpc_security_group_ids = [aws_security_group.ec2.id]
+
+    associate_public_ip_address = false
+    
+    tags = {
+        Name = "${local.name_prefix}-app"
+    }
+}
