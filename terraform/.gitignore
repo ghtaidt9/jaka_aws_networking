@@ -1,0 +1,24 @@
+# Terraform working directory
+.terraform/
+.terraform.lock.hcl
+
+# Local state files
+*.tfstate
+*.tfstate.*
+terraform.tfstate
+terraform.tfstate.backup
+
+# Crash logs and override files
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Local variable files if they contain secrets
+*.auto.tfvars
+*.auto.tfvars.json
+
+# Provider cache / plan files
+*.plan
