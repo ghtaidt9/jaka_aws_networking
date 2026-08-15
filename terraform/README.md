@@ -1,28 +1,3 @@
-# Terraform AWS Networking — README
-
-This README explains how to deploy the AWS infrastructure in this folder with Terraform, what resources are created, a VPC diagram and explanations, and how to verify (and preserve proof) that an EC2 in the private subnet can reach the Internet through the NAT gateway.
-
----
-
-## Contents of this folder
-
-- `*.tf` — Terraform configuration files (VPC, subnets, IGW, NAT, route tables, security groups, ALB, EC2, outputs, variables, provider, versions)
-- `terraform.tfvars` — variable values used for local testing (region, CIDRs, AZs, project/environment)
-- `terraform.tfstate` — (local) Terraform state created after apply. Do NOT commit this file to Git.
-
----
-
-## Prerequisites
-
-- Terraform (recommended >= 1.6)
-- AWS CLI (optional but useful for verification)
-- AWS credentials with sufficient permissions (see notes below)
-- PowerShell on Windows (examples shown for PowerShell)
-
-Note: For CI/CD (GitHub Actions) use OIDC role assumption rather than long-lived access keys.
-
----
-
 ## Quick local deploy (PowerShell)
 
 1. Open PowerShell and change into this folder:
@@ -70,6 +45,33 @@ terraform output vpc_id
 terraform output alb_dns_name
 terraform output ec2_private_ip
 ```
+EC2 ping internet - Proof: ![EC2 ping internet via NAT](/jaka_aws_networking/terraform/proof_ec2_ping_internet_via_nat.png)
+
+---
+
+
+# Terraform AWS Networking — README
+
+This README explains how to deploy the AWS infrastructure in this folder with Terraform, what resources are created, a VPC diagram and explanations, and how to verify (and preserve proof) that an EC2 in the private subnet can reach the Internet through the NAT gateway.
+
+---
+
+## Contents of this folder
+
+- `*.tf` — Terraform configuration files (VPC, subnets, IGW, NAT, route tables, security groups, ALB, EC2, outputs, variables, provider, versions)
+- `terraform.tfvars` — variable values used for local testing (region, CIDRs, AZs, project/environment)
+- `terraform.tfstate` — (local) Terraform state created after apply. Do NOT commit this file to Git.
+
+---
+
+## Prerequisites
+
+- Terraform (recommended >= 1.6)
+- AWS CLI (optional but useful for verification)
+- AWS credentials with sufficient permissions (see notes below)
+- PowerShell on Windows (examples shown for PowerShell)
+
+Note: For CI/CD (GitHub Actions) use OIDC role assumption rather than long-lived access keys.
 
 ---
 
