@@ -4,13 +4,13 @@
 
 resource "aws_eip" "nat" {
 
-    domain = "vpc"
+  domain = "vpc"
 
-    tags = {
-        Name = "${local.name_prefix}-nat-eip"
-    }
+  tags = {
+    Name = "${local.name_prefix}-nat-eip"
+  }
 
-    depends_on = [aws_internet_gateway.main]
+  depends_on = [aws_internet_gateway.main]
 }
 
 ###############################################
@@ -19,13 +19,13 @@ resource "aws_eip" "nat" {
 
 resource "aws_nat_gateway" "main" {
 
-    allocation_id = aws_eip.nat.id
-    
-    subnet_id = aws_subnet.public_1.id
+  allocation_id = aws_eip.nat.id
 
-    tags = {
-        Name = "${local.name_prefix}-nat"
-    }
+  subnet_id = aws_subnet.public_1.id
 
-    depends_on = [aws_internet_gateway.main]
+  tags = {
+    Name = "${local.name_prefix}-nat"
+  }
+
+  depends_on = [aws_internet_gateway.main]
 }

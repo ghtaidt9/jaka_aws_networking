@@ -3,8 +3,8 @@
 ###############################################
 
 output "vpc_id" {
-    description = "The ID of the VPC"
-    value       = aws_vpc.main.id
+  description = "The ID of the VPC"
+  value       = aws_vpc.main.id
 }
 
 ###############################################
@@ -12,8 +12,8 @@ output "vpc_id" {
 ###############################################
 
 output "alb_dns_name" {
-    description = "The DNS name of the ALB"
-    value       = aws_lb.app_alb.dns_name
+  description = "The DNS name of the ALB"
+  value       = aws_lb.app_alb.dns_name
 }
 
 ###############################################
@@ -21,6 +21,6 @@ output "alb_dns_name" {
 ###############################################
 
 output "ec2_private_ip" {
-    description = "The private IP address of the EC2 instance"
-    value       = aws_instance.app.private_ip
+  description = "The private IP address of the EC2 instance"
+  value       = aws_instance.app.private_ip
 }

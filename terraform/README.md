@@ -45,9 +45,21 @@ terraform output vpc_id
 terraform output alb_dns_name
 terraform output ec2_private_ip
 ```
-EC2 ping internet - Proof: ![EC2 ping internet via NAT](/jaka_aws_networking/terraform/proof_ec2_ping_internet_via_nat.png)
+ EC2 ping internet - Proof: ![EC2 ping internet via NAT](/jaka_aws_networking/terraform/pictures_proof/proof_ec2_ping_internet_via_nat.png)
 
+ EC2 ping ALB - Proof: ![EC2 ping ALB - Proof](/jaka_aws_networking/terraform/pictures_proof/ec2_ping_alb_proof.png)
+
+ ALB can reach Internet - Proof: ![ALB reach Internet - Proof](/jaka_aws_networking/terraform/pictures_proof/alb_outbound_proof.png)
+
+ EC2 can't reach from Internet - Proof:
+  EC2 instance doesn't have public IP, so it is unreachable from the internet directly:
+  ```
+    associate_public_ip_address = false
+  ```
 ---
+
+
+
 
 
 # Terraform AWS Networking — README

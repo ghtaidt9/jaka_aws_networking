@@ -1,4 +1,4 @@
-project = "vpc-lab"
+project     = "vpc-lab"
 environment = "dev"
 
 region = "ap-southeast-1"

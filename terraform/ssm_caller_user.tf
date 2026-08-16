@@ -18,7 +18,7 @@ resource "aws_iam_policy" "ssm_caller_policy" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid = "AllowSSMStartOnTaggedInstances",
+        Sid    = "AllowSSMStartOnTaggedInstances",
         Effect = "Allow",
         Action = [
           "ssm:StartSession",
@@ -33,7 +33,7 @@ resource "aws_iam_policy" "ssm_caller_policy" {
         }
       },
       {
-        Sid = "AllowSSMMessagesChannels",
+        Sid    = "AllowSSMMessagesChannels",
         Effect = "Allow",
         Action = [
           "ssmmessages:CreateControlChannel",
@@ -44,7 +44,7 @@ resource "aws_iam_policy" "ssm_caller_policy" {
         Resource = "*"
       },
       {
-        Sid = "DescribeNeededResources",
+        Sid    = "DescribeNeededResources",
         Effect = "Allow",
         Action = [
           "ssm:DescribeInstanceInformation",

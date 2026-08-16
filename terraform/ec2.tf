@@ -3,22 +3,22 @@
 ###############################################
 
 data "aws_ami" "amazon_linux" {
-    most_recent = true
-    owners = ["amazon"]
-    filter {
-        name = "name"
-        values = ["al2023-ami-*-x86_64"]
-    }
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
 
-    filter {
-        name = "virtualization-type"
-        values = ["hvm"]
-    }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 
-    filter {
-        name = "architecture"
-        values = ["x86_64"]
-    }
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
 }
 
 ###############################################
@@ -26,19 +26,19 @@ data "aws_ami" "amazon_linux" {
 ###############################################
 
 resource "aws_instance" "app" {
-    ami             = data.aws_ami.amazon_linux.id
-    instance_type   = var.instance_type
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
 
-    subnet_id       = aws_subnet.private_1.id
+  subnet_id = aws_subnet.private_1.id
 
-    vpc_security_group_ids = [aws_security_group.ec2.id]
+  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
-    associate_public_ip_address = false
+  associate_public_ip_address = false
 
-    iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
-    
-    tags = {
-        Name = "${local.name_prefix}-app"
-        SSMAccess = "true"
-    }
+  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
+
+  tags = {
+    Name      = "${local.name_prefix}-app"
+    SSMAccess = "true"
+  }
 }
