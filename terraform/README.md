@@ -56,6 +56,9 @@ terraform output ec2_private_ip
   ```
     associate_public_ip_address = false
   ```
+
+ Access the applications inside EC2 via ALB-DNS: ![](/jaka_aws_networking/terraform/pictures_proof/curl_ec2_health_check.png)
+ TG healthy - Proof: ![](/jaka_aws_networking/terraform/pictures_proof/target_group_healthy_proof.png)
 ---
 
 

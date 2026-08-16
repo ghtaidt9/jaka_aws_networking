@@ -22,6 +22,34 @@ resource "aws_lb_listener" "http" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.ec2_tg.arn
+    target_group_arn = aws_lb_target_group.order_tg.arn
+  }
+}
+
+resource "aws_lb_listener_rule" "orders" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100
+  condition {
+    path_pattern {
+      values = ["/api/orders", "/api/orders/*"]
+    }
+  }
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.order_tg.arn
+  }
+}
+
+resource "aws_lb_listener_rule" "payments" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 200
+  condition {
+    path_pattern {
+      values = ["/api/payments", "/api/payments/*"]
+    }
+  }
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.payment_tg.arn
   }
 }
