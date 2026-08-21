@@ -1,12 +1,147 @@
-## Quick local deploy (PowerShell)
+# Terraform AWS Networking — README
 
-1. Open PowerShell and change into this folder:
+Terraform configuration that provisions a two-AZ AWS VPC (public/private subnets, IGW, NAT), security groups, an Application Load Balancer with path-based routing, and two private EC2 instances (order-service, payment-service) reachable only through the ALB. This README covers how to deploy it, the resulting architecture, and proof that networking/routing/security work as intended.
+
+---
+
+## Contents
+
+- [Contents of this folder](#contents-of-this-folder)
+- [Prerequisites](#prerequisites)
+- [Architecture](#architecture)
+  - [VPC & subnets](#vpc--subnets)
+  - [Route tables](#route-tables)
+  - [Security groups](#security-groups)
+  - [Private-instance access](#private-instance-access)
+- [Application Load Balancer](#application-load-balancer)
+- [Deploy (PowerShell)](#deploy-powershell)
+- [Verification & proof](#verification--proof)
+- [Destroy / teardown](#destroy--teardown)
+- [Git / CI precautions](#git--ci-precautions)
+- [Troubleshooting](#troubleshooting)
+- [Possible next steps](#possible-next-steps)
+
+---
+
+## Contents of this folder
+
+- `*.tf` — Terraform configuration (VPC, subnets, IGW, NAT, route tables, security groups, ALB, target groups, EC2, SSM instance profile, outputs, variables, provider, versions)
+- `terraform.tfvars` — variable values used for local testing (region, CIDRs, AZs, project/environment)
+- `pictures_proof/` — screenshots proving connectivity/security/routing behavior (see [Verification & proof](#verification--proof))
+- `terraform.tfstate` — (local) Terraform state created after apply. Do **NOT** commit this file to Git.
+
+---
+
+## Prerequisites
+
+- Terraform (recommended >= 1.6)
+- AWS CLI (optional but useful for verification; required for SSM Session Manager access)
+- AWS credentials with sufficient permissions
+- PowerShell on Windows (examples below use PowerShell)
+
+Note: for CI/CD (GitHub Actions) use OIDC role assumption rather than long-lived access keys.
+
+---
+
+## Architecture
+
+### VPC & subnets
+
+Legend: IGW = Internet Gateway, NAT = NAT Gateway, ALB = Application Load Balancer, AZ = Availability Zone
+
+```
+AWS Region (ap-southeast-1)
+  VPC 10.0.0.0/16   (terraform output vpc_id)
+   |
+   +-- AZ1 (ap-southeast-1a)
+   |     +-- Public Subnet 1  (10.0.1.0/24)  -> route: 0.0.0.0/0 via IGW | hosts: NAT Gateway, ALB node
+   |     +-- Private Subnet 1 (10.0.11.0/24) -> route: 0.0.0.0/0 via NAT | hosts: EC2 order-service (:8080)
+   |
+   +-- AZ2 (ap-southeast-1b)
+   |     +-- Public Subnet 2  (10.0.2.0/24)  -> route: 0.0.0.0/0 via IGW | hosts: ALB node
+   |     +-- Private Subnet 2 (10.0.12.0/24) -> route: 0.0.0.0/0 via NAT | hosts: EC2 payment-service (:8081)
+   |
+   +-- Internet Gateway (IGW) -- attached to the VPC, used by both public subnets
+   +-- NAT Gateway -- deployed in Public Subnet 1 (AZ1), used by both private subnets
+```
+
+- EC2 instances in private subnets have no public IP and are therefore **not** directly reachable from the Internet.
+- Private EC2 instances reach the Internet outbound through the NAT Gateway (source: [nat.tf](nat.tf)).
+
+### Route tables
+
+See [route_table.tf](route_table.tf):
+
+| Route table | Rule | Associated subnets |
+|---|---|---|
+| `route_table_public` | `0.0.0.0/0 -> Internet Gateway` | Public Subnet 1, Public Subnet 2 |
+| `route_table_private` | `0.0.0.0/0 -> NAT Gateway` (NAT lives in Public Subnet 1 / AZ1) | Private Subnet 1, Private Subnet 2 |
+
+### Security groups
+
+See [security_groups.tf](security_groups.tf):
+
+| Security group | Inbound | Notes |
+|---|---|---|
+| `alb-sg` | 80/443 from `0.0.0.0/0` | only internet-facing edge; outbound all |
+| `ec2-sg` | 8080-8081 **only from `alb-sg`**; 22 from `var.ssh_allowed_cidr` | never reachable from the internet directly; outbound all |
+| `rds-sg` | 5432 (Postgres) only from `ec2-sg` | |
+| `redis-sg` | 6379 (Redis) only from `ec2-sg` | |
+
+> ⚠️ `ssh_allowed_cidr` defaults to `0.0.0.0/0` in [variables.tf](variables.tf) for lab convenience. Restrict it to your admin IP/CIDR in `terraform.tfvars` to follow least-privilege — the EC2 instances have no public IP today so this rule isn't internet-reachable, but the SG rule itself should still be scoped down.
+
+### Private-instance access
+
+There is **no bastion host** in this environment. EC2 instances have no public IP (`associate_public_ip_address = false`) and are administered via **AWS Systems Manager (SSM) Session Manager** (see `ssm_instance_profile.tf`), which avoids opening SSH to the instances at all.
+
+```powershell
+# From your workstation — no public IP or open SSH port required on the instance
+aws ssm start-session --target <instance-id>
+```
+
+---
+
+## Application Load Balancer
+
+- ALB name: `vpc-lab-dev-alb`, internet-facing, deployed across both public subnets (AZ1 + AZ2) for multi-AZ availability.
+- DNS name: printed by `terraform output alb_dns_name` after apply. Example from a prior run: `vpc-lab-dev-alb-546044212.ap-southeast-1.elb.amazonaws.com`.
+- Listener: HTTP, port 80.
+
+Path-based routing rules (see [alb.tf](alb.tf)):
+
+| Priority | Path pattern | Target group | Forwards to |
+|---|---|---|---|
+| 100 | `/api/orders`, `/api/orders/*` | `order-tg` (port 8080) | EC2 order-service instance |
+| 200 | `/api/payments`, `/api/payments/*` | `payment-tg` (port 8081) | EC2 payment-service instance |
+| default | any other path | `order-tg` (port 8080) | listener's default action |
+
+Target group health checks (see [target_groups.tf](target_groups.tf)):
+
+| Target group | Health check path | Port |
+|---|---|---|
+| `order-tg` | `/api/orders/actuator/health` | traffic-port (8080) |
+| `payment-tg` | `/api/payments/actuator/health` | traffic-port (8081) |
+
+> Health check paths include each service's context path (`/api/orders`, `/api/payments`) instead of a bare `/actuator/health`, matching how the two Spring Boot services are actually exposed behind the ALB.
+
+Verify routing manually:
+
+```bash
+curl -i http://<ALB_DNS_NAME>/api/orders
+curl -i http://<ALB_DNS_NAME>/api/payments
+```
+
+---
+
+## Deploy (PowerShell)
+
+1. Change into this folder:
 
 ```powershell
 Set-Location "C:\Users\TaiDT9\Documents\jaka_base\jaka_aws_networking\terraform"
 ```
 
-2. Set AWS environment variables for the current session (temporary):
+2. Set AWS credentials for the current session (temporary):
 
 ```powershell
 $env:AWS_ACCESS_KEY_ID = "<YOUR_ACCESS_KEY>"
@@ -37,62 +172,99 @@ terraform apply -var-file="terraform.tfvars"
 # terraform apply -var-file="terraform.tfvars" -auto-approve
 ```
 
-6. After apply, inspect outputs:
+6. Inspect outputs:
 
 ```powershell
-terraform output   # list all outputs
+terraform output              # list all outputs
 terraform output vpc_id
 terraform output alb_dns_name
-terraform output ec2_private_ip
+terraform output ec2_order_private_ip
+terraform output ec2_payment_private_ip
 ```
- EC2 ping internet - Proof: ![EC2 ping internet via NAT](/jaka_aws_networking/terraform/pictures_proof/proof_ec2_ping_internet_via_nat.png)
-
- EC2 ping ALB - Proof: ![EC2 ping ALB - Proof](/jaka_aws_networking/terraform/pictures_proof/ec2_ping_alb_proof.png)
-
- ALB can reach Internet - Proof: ![ALB reach Internet - Proof](/jaka_aws_networking/terraform/pictures_proof/alb_outbound_proof.png)
-
- EC2 can't reach from Internet - Proof:
-  EC2 instance doesn't have public IP, so it is unreachable from the internet directly:
-  ```
-    associate_public_ip_address = false
-  ```
-
- Access the applications inside EC2 via ALB-DNS: ![](/jaka_aws_networking/terraform/pictures_proof/curl_ec2_health_check.png)
- TG healthy - Proof: ![](/jaka_aws_networking/terraform/pictures_proof/target_group_healthy_proof.png)
----
-
-
-
-
-
-# Terraform AWS Networking — README
-
-This README explains how to deploy the AWS infrastructure in this folder with Terraform, what resources are created, a VPC diagram and explanations, and how to verify (and preserve proof) that an EC2 in the private subnet can reach the Internet through the NAT gateway.
 
 ---
 
-## Contents of this folder
+## Verification & proof
 
-- `*.tf` — Terraform configuration files (VPC, subnets, IGW, NAT, route tables, security groups, ALB, EC2, outputs, variables, provider, versions)
-- `terraform.tfvars` — variable values used for local testing (region, CIDRs, AZs, project/environment)
-- `terraform.tfstate` — (local) Terraform state created after apply. Do NOT commit this file to Git.
+### VPC / NAT — private EC2 reaches the Internet
+
+Steps to reproduce and preserve proof that a private EC2 can reach the Internet via the NAT gateway:
+
+1. Capture Terraform outputs after apply:
+
+```powershell
+terraform output > deploy_outputs.txt
+```
+
+2. Example outputs from a previous successful apply (kept here as reference):
+
+- vpc_id: `vpc-0dec48674aa8d4de1`
+- alb_dns_name: `vpc-lab-dev-alb-546044212.ap-southeast-1.elb.amazonaws.com`
+- ec2_private_ip: `10.0.11.39`
+- instance id: `i-08e5a95374996fd73`
+
+(These values are from a prior apply recorded in the local state file — keep them as evidence in your run artifacts.)
+
+3. Connect to the private EC2 via SSM Session Manager (no bastion needed):
+
+```powershell
+aws ssm start-session --target i-08e5a95374996fd73
+```
+
+4. Inside the private EC2, test outbound connectivity (ICMP may be blocked on some OS images — prefer a TCP/HTTP test):
+
+```bash
+nslookup google.com
+curl -I https://www.google.com
+# On Windows (PowerShell): Test-NetConnection -ComputerName google.com -Port 443
+```
+
+Expected result: `curl -I https://www.google.com` returns HTTP 200/302 headers. Save the terminal output as proof:
+
+```powershell
+curl -I https://www.google.com > nat_proof.txt
+```
+
+**Proof:** ![EC2 ping internet via NAT](pictures_proof/proof_ec2_ping_internet_via_nat.png)
+
+### Security groups — reachability matrix
+
+| Claim | Proof |
+|---|---|
+| EC2 can reach the ALB (port 8080 open, `ec2-sg` allows egress / `alb-sg` reachable) | ![EC2 ping ALB](pictures_proof/ec2_ping_alb_proof.png) |
+| ALB can reach the Internet (port 80 open outbound) | ![ALB reach Internet](pictures_proof/alb_outbound_proof.png) |
+| EC2 is **not** reachable from the Internet directly | No public IP is assigned (`associate_public_ip_address = false` in [ec2.tf](ec2.tf)), so there is no route from the internet to the instance regardless of SG rules. |
+
+### ALB — routing & health
+
+| Claim | Proof |
+|---|---|
+| Applications inside EC2 are reachable through the ALB DNS | ![Access via ALB DNS](pictures_proof/curl_ec2_health_check.png) |
+| Target groups are healthy | ![Target group healthy](pictures_proof/target_group_healthy_proof.png) |
 
 ---
 
-## Prerequisites
+## Destroy / teardown
 
-- Terraform (recommended >= 1.6)
-- AWS CLI (optional but useful for verification)
-- AWS credentials with sufficient permissions (see notes below)
-- PowerShell on Windows (examples shown for PowerShell)
+From the same folder, after confirming you're using the correct AWS credentials:
 
-Note: For CI/CD (GitHub Actions) use OIDC role assumption rather than long-lived access keys.
+```powershell
+terraform destroy -var-file="terraform.tfvars" -auto-approve
+```
+
+After a successful destroy, you may remove local state files (only once you've confirmed resources are deleted):
+
+```powershell
+Remove-Item terraform.tfstate
+Remove-Item terraform.tfstate.backup
+Remove-Item -Recurse .terraform
+```
 
 ---
 
-## Recommended Git / CI precautions
+## Git / CI precautions
 
-- Add a `.gitignore` (examples):
+- Add a `.gitignore`:
 
 ```
 .terraform/
@@ -110,135 +282,38 @@ override.tf.json
 
 ---
 
-## Architecture diagram (logical)
-
-Legend: IGW = Internet Gateway, NAT = NAT Gateway, ALB = Application Load Balancer
-
-Public Subnet(s)                      Private Subnet(s)
-+---------------------------+         +--------------------------+
-|  Public Subnet 1          |         |  Private Subnet 1        |
-|  - bastion (public IP)    | <---->  |  - EC2 app (no public IP)|
-|  - NAT Gateway (EIP)      |  NAT    |  - private IP            |
-|  - ALB (in public subnets)|         |  - routes -> NAT         |
-+---------------------------+         +--------------------------+
-           |                                   |
-           +--------- Internet (via IGW) -------+
-
-Route table summary:
-- Public route table: 0.0.0.0/0 -> Internet Gateway (IGW)
-- Private route table: 0.0.0.0/0 -> NAT Gateway (in a public subnet)
-
-Security group summary:
-- ALB SG: allow inbound 80/443 from 0.0.0.0/0, outbound to 0.0.0.0/0
-- Bastion SG (if created): allow SSH (22) from your admin IP(s)
-- EC2 SG: allow HTTP from ALB SG, allow SSH only from bastion SG or admin CIDR
-
----
-
-## How this design affects connectivity
-
-- EC2 instances in private subnets have no public IP and therefore are not directly reachable from the Internet.
-- Private EC2 instances can reach the Internet for outbound traffic by using the NAT Gateway in the public subnet.
-- To administer private EC2 instances you either:
-  - connect through a bastion (jump host) in a public subnet, or
-  - use AWS Systems Manager (SSM) Session Manager (preferred for reduced attack surface).
-
----
-
-## Verifying EC2 outbound access via NAT (proof)
-
-Steps to preserve a proof record that a private EC2 can reach the Internet via the NAT gateway:
-
-1. Capture Terraform outputs (after apply):
-
-```powershell
-terraform output > deploy_outputs.txt
-```
-
-This will capture outputs produced by the `outputs.tf` file.
-
-2. Example of outputs from a previous successful apply (saved here as reference):
-
-- vpc_id: `vpc-0dec48674aa8d4de1`
-- alb_dns_name: `vpc-lab-dev-alb-546044212.ap-southeast-1.elb.amazonaws.com`
-- ec2_private_ip: `10.0.11.39`
-- instance id: `i-08e5a95374996fd73`
-
-(These values are from a prior apply recorded in the local state file — keep them as evidence in your run artifacts.)
-
-3. Access the private EC2 to run the network test:
-
-- If using a bastion host (recommended):
-  - SSH to bastion (public IP) from your workstation.
-  - From the bastion, SSH to the private EC2 using its private IP.
-
-Example (from your laptop -> bastion -> private instance):
-
-```bash
-# on your laptop
-ssh -i ~/.ssh/id_rsa ec2-user@<BASTION_PUBLIC_IP>
-# on bastion
-ssh -i ~/.ssh/id_rsa ec2-user@10.0.11.39
-```
-
-- If using SSM Session Manager:
-
-```powershell
-# From your workstation (no public IP on instance required)
-aws ssm start-session --target i-08e5a95374996fd73
-```
-
-4. Inside the private EC2, test outbound connectivity (ICMP may be blocked on some OS images — prefer TCP test):
-
-```bash
-# Test DNS resolution
-nslookup google.com
-# Test HTTP(S)
-curl -I https://www.google.com
-# Or TCP connection to a known port (443)
-# On Windows (PowerShell): Test-NetConnection -ComputerName google.com -Port 443
-```
-
-Expected result (example):
-
-- `curl -I https://www.google.com` returns HTTP 200/302 headers
-- `ping 8.8.8.8` may succeed depending on ICMP allowance, but HTTP test is more reliable
-
-Save the terminal output as proof (e.g. `nat_proof.txt`).
-
-```powershell
-# from the bastion session or SSM session
-curl -I https://www.google.com > nat_proof.txt
-```
-
-5. Keep the proof artifacts with your deployment logs (do NOT store secrets in those artifacts).
-
----
-
-## How to remove everything (destroy)
-
-From the same folder, after you verify you are using the correct AWS credentials:
-
-```powershell
-terraform destroy -var-file="terraform.tfvars" -auto-approve
-```
-
-That will read the state and delete the Terraform-managed resources. After successful destroy, you may remove local state files if desired (only after confirming resources are deleted):
-
-```powershell
-Remove-Item terraform.tfstate
-Remove-Item terraform.tfstate.backup
-Remove-Item -Recurse .terraform
-```
-
----
-
-## Notes and troubleshooting
+## Troubleshooting
 
 - Region: check `terraform.tfvars` — the default region in this workspace is `ap-southeast-1`.
 - If you do not see resources in the AWS console, confirm the console region matches the Terraform region.
-- If `terraform plan` returns authentication errors (STS/GetCallerIdentity failures), verify AWS credentials or role permission.
+- If `terraform plan` returns authentication errors (STS `GetCallerIdentity` failures), verify AWS credentials or role permissions.
 - Consider configuring a remote state backend (S3 + DynamoDB) before enabling CI automated `apply`.
+
+---
+
+## Possible next steps
+
+- Add a minimal `bastion` Terraform resource (optional — SSM Session Manager already covers private-instance access without one) and wire its SG.
+- Add a GitHub Actions workflow that runs `terraform init/plan` on PRs and `terraform apply` on the protected branch with OIDC role assumption.
+- Tighten `ssh_allowed_cidr` to a specific admin IP/CIDR instead of `0.0.0.0/0`.
+- Add IAM roles/policies for the EC2 instances (CloudWatch logs, S3, Secrets Manager) per the Week 2 plan.
+abling CI automated `apply`.
+
+---
+
+If you want, I can also:
+- add a minimal `bastion` Terraform resource to this repo and wire the SGs
+- create a basic GitHub Actions workflow that runs `terraform init/plan` on PRs and `terraform apply` on protected branch with OIDC role assumption
+
+abling CI automated `apply`.
+
+---
+
+If you want, I can also:
+- add a minimal `bastion` Terraform resource to this repo and wire the SGs
+- create a basic GitHub Actions workflow that runs `terraform init/plan` on PRs and `terraform apply` on protected branch with OIDC role assumption
+
+abling CI automated `apply`.
 
 ---
 

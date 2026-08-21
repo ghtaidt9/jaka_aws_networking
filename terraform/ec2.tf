@@ -31,7 +31,24 @@ resource "aws_instance" "ec2_order" {
   subnet_id                   = aws_subnet.private_1.id
   vpc_security_group_ids      = [aws_security_group.ec2_sg.id]
   associate_public_ip_address = false
-  iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.microservice_instance_profile.name
+
+  user_data = replace(<<-EOF
+    #!/bin/bash
+    mkdir -p /etc/docker
+    cat > /etc/docker/daemon.json <<'JSON'
+    {
+      "log-driver": "awslogs",
+      "log-opts": {
+        "awslogs-region": "ap-southeast-1",
+        "awslogs-group": "/microservice/order-service"
+      }
+    }
+    JSON
+    systemctl restart docker
+  EOF
+  , "\r\n", "\n")
+
   tags = {
     Name      = "${local.name_prefix}-ec2-order"
     SSMAccess = "true"
@@ -44,7 +61,24 @@ resource "aws_instance" "ec2_payment" {
   subnet_id                   = aws_subnet.private_2.id
   vpc_security_group_ids      = [aws_security_group.ec2_sg.id]
   associate_public_ip_address = false
-  iam_instance_profile        = aws_iam_instance_profile.ssm_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.microservice_instance_profile.name
+
+  user_data = replace(<<-EOF
+    #!/bin/bash
+    mkdir -p /etc/docker
+    cat > /etc/docker/daemon.json <<'JSON'
+    {
+      "log-driver": "awslogs",
+      "log-opts": {
+        "awslogs-region": "ap-southeast-1",
+        "awslogs-group": "/microservice/payment-service"
+      }
+    }
+    JSON
+    systemctl restart docker
+  EOF
+  , "\r\n", "\n")
+
   tags = {
     Name      = "${local.name_prefix}-ec2-payment"
     SSMAccess = "true"
