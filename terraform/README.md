@@ -133,6 +133,14 @@ curl -i http://<ALB_DNS_NAME>/api/payments
 
 ---
 
+## CloudWatch
+
+- Attach CloudWatchAgentServerPolicy policy into role.
+- Define Log Groups
+- Define aws_ssm_parameter use templatefile (define in templates)
+
+---
+
 ## Deploy (PowerShell)
 
 1. Change into this folder:

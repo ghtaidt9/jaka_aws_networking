@@ -33,21 +33,9 @@ resource "aws_instance" "ec2_order" {
   associate_public_ip_address = false
   iam_instance_profile        = aws_iam_instance_profile.microservice_instance_profile.name
 
-  user_data = replace(<<-EOF
-    #!/bin/bash
-    mkdir -p /etc/docker
-    cat > /etc/docker/daemon.json <<'JSON'
-    {
-      "log-driver": "awslogs",
-      "log-opts": {
-        "awslogs-region": "ap-southeast-1",
-        "awslogs-group": "/microservice/order-service"
-      }
-    }
-    JSON
-    systemctl restart docker
-  EOF
-  , "\r\n", "\n")
+  user_data = templatefile("${path.module}/templates/cloudwatch-agent-bootstrap.sh.tpl", {
+    ssm_parameter_name = aws_ssm_parameter.order_service_agent_config.name
+  })
 
   tags = {
     Name      = "${local.name_prefix}-ec2-order"
@@ -63,21 +51,9 @@ resource "aws_instance" "ec2_payment" {
   associate_public_ip_address = false
   iam_instance_profile        = aws_iam_instance_profile.microservice_instance_profile.name
 
-  user_data = replace(<<-EOF
-    #!/bin/bash
-    mkdir -p /etc/docker
-    cat > /etc/docker/daemon.json <<'JSON'
-    {
-      "log-driver": "awslogs",
-      "log-opts": {
-        "awslogs-region": "ap-southeast-1",
-        "awslogs-group": "/microservice/payment-service"
-      }
-    }
-    JSON
-    systemctl restart docker
-  EOF
-  , "\r\n", "\n")
+  user_data = templatefile("${path.module}/templates/cloudwatch-agent-bootstrap.sh.tpl", {
+    ssm_parameter_name = aws_ssm_parameter.payment_service_agent_config.name
+  })
 
   tags = {
     Name      = "${local.name_prefix}-ec2-payment"
