@@ -1,0 +1,29 @@
+# LocalStack - AWS emulator for local development of this Terraform project.
+# Usage:  docker compose up -d   (from this folder)
+# Put LOCALSTACK_AUTH_TOKEN in .env (see .env.example) to enable Pro services
+# (ALB, ASG, RDS, ElastiCache, ECR).
+services:
+  localstack:
+    image: ${LOCALSTACK_IMAGE:-localstack/localstack-pro:latest}
+    container_name: localstack
+    ports:
+      - "127.0.0.1:4566:4566"            # edge endpoint (all AWS APIs)
+      - "127.0.0.1:4510-4559:4510-4559"  # external service ports (RDS, ElastiCache, ...)
+    environment:
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
+      - DEBUG=0
+      - PERSISTENCE=1
+      - EC2_VM_MANAGER=docker
+    volumes:
+      - "./volume:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+  # Moto - free open-source AWS mock that also covers the services LocalStack
+  # only offers in Pro (ELBv2, AutoScaling, RDS, ElastiCache, ECR).
+  # Start with:  docker compose --profile moto up -d moto
+  moto:
+    image: motoserver/moto:latest
+    container_name: moto
+    profiles: ["moto"]
+    ports:
+      - "127.0.0.1:5000:5000"

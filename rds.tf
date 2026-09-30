@@ -1,17 +1,5 @@
 # Random password
 
-resource "random_password" "order_db" {
-  length           = 20
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
-}
-
-resource "random_password" "payment_db" {
-  length           = 20
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
-}
-
 resource "random_password" "order_app_user" {
   length           = 20
   special          = true
@@ -45,9 +33,11 @@ resource "aws_db_instance" "order_db" {
   instance_class    = var.rds_instance_class
   allocated_storage = var.rds_allocated_storage
 
-  db_name  = "orders"
-  username = local.order_db_username
-  password = random_password.order_db.result
+  db_name                       = "orders"
+  username                      = local.order_db_username
+  manage_master_user_password   = true
+  master_user_secret_kms_key_id = aws_kms_key.secrets.key_id
+  apply_immediately             = true
 
   db_subnet_group_name   = aws_db_subnet_group.db_subnet.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
@@ -61,6 +51,13 @@ resource "aws_db_instance" "order_db" {
 
   parameter_group_name = aws_db_parameter_group.order_db.name
 
+  enabled_cloudwatch_logs_exports = [
+    "postgresql",
+    "upgrade"
+  ]
+
+  depends_on = [aws_cloudwatch_log_group.order_db_postgresql]
+
   tags = {
     Name = "${local.name_prefix}-order-db"
   }
@@ -73,9 +70,11 @@ resource "aws_db_instance" "payment_db" {
   instance_class    = var.rds_instance_class
   allocated_storage = var.rds_allocated_storage
 
-  db_name  = "payments"
-  username = local.payment_db_username
-  password = random_password.payment_db.result
+  db_name                       = "payments"
+  username                      = local.payment_db_username
+  manage_master_user_password   = true
+  master_user_secret_kms_key_id = aws_kms_key.secrets.key_id
+  apply_immediately             = true
 
   db_subnet_group_name   = aws_db_subnet_group.db_subnet.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
@@ -89,6 +88,13 @@ resource "aws_db_instance" "payment_db" {
 
   parameter_group_name = aws_db_parameter_group.payment_db.name
 
+  enabled_cloudwatch_logs_exports = [
+    "postgresql",
+    "upgrade"
+  ]
+
+  depends_on = [aws_cloudwatch_log_group.payment_db_postgresql]
+
   tags = {
     Name = "${local.name_prefix}-payment-db"
   }
@@ -100,34 +106,10 @@ resource "aws_ssm_parameter" "order_db_url" {
   value = "jdbc:postgresql://${aws_db_instance.order_db.address}:${aws_db_instance.order_db.port}/${aws_db_instance.order_db.db_name}?sslmode=require"
 }
 
-resource "aws_ssm_parameter" "order_db_password" {
-  name  = local.order_db_password_param
-  type  = "SecureString"
-  value = random_password.order_db.result
-}
-
 resource "aws_ssm_parameter" "payment_db_url" {
   name  = local.payment_db_url_param
   type  = "String"
   value = "jdbc:postgresql://${aws_db_instance.payment_db.address}:${aws_db_instance.payment_db.port}/${aws_db_instance.payment_db.db_name}?sslmode=require"
-}
-
-resource "aws_ssm_parameter" "payment_db_password" {
-  name  = local.payment_db_password_param
-  type  = "SecureString"
-  value = random_password.payment_db.result
-}
-
-resource "aws_ssm_parameter" "order_app_user_db_password" {
-  name  = local.order_app_db_password_param
-  type  = "SecureString"
-  value = random_password.order_app_user.result
-}
-
-resource "aws_ssm_parameter" "payment_app_user_db_password" {
-  name  = local.payment_app_db_password_param
-  type  = "SecureString"
-  value = random_password.payment_app_user.result
 }
 
 resource "aws_db_parameter_group" "order_db" {

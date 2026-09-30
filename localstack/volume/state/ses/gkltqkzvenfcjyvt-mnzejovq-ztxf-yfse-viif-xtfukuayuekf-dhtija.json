@@ -1,0 +1,16 @@
+{
+    "Id": "gkltqkzvenfcjyvt-mnzejovq-ztxf-yfse-viif-xtfukuayuekf-dhtija",
+    "Region": "us-east-1",
+    "Destination": {
+        "ToAddresses": [
+            "ggtaidt9@gmail.com"
+        ]
+    },
+    "Source": "admin@localstack.com",
+    "Subject": "SNS-Subscriber-Endpoint",
+    "Body": {
+        "text_part": "{\"AWSAccountId\": \"000000000000\", \"OldStateValue\": \"INSUFFICIENT_DATA\", \"AlarmName\": \"vpc-lab-dev-order-service-log-errors-high\", \"AlarmDescription\": \"order-service logged more than 10 ERROR lines in 5 minutes\", \"AlarmConfigurationUpdatedTimestamp\": \"2026-09-26T06:57:09.677Z\", \"NewStateValue\": \"OK\", \"NewStateReason\": \"Threshold Crossed: no datapoints were received for 1 period and 1 missing datapoint was treated as [NonBreaching].\", \"StateChangeTime\": \"2026-09-26T06:57:09.813Z\", \"Region\": \"Ap southeast 1\", \"AlarmArn\": \"arn:aws:cloudwatch:ap-southeast-1:000000000000:alarm:vpc-lab-dev-order-service-log-errors-high\", \"OKActions\": [\"arn:aws:sns:ap-southeast-1:000000000000:vpc-lab-dev-alarms\"], \"AlarmActions\": [\"arn:aws:sns:ap-southeast-1:000000000000:vpc-lab-dev-alarms\"], \"InsufficientDataActions\": [], \"Trigger\": {\"MetricName\": \"order-service-errors-count\", \"Namespace\": \"Microservices/Logs\", \"Unit\": null, \"Period\": 300, \"EvaluationPeriods\": 1, \"ComparisonOperator\": \"GreaterThanThreshold\", \"Threshold\": 10.0, \"TreatMissingData\": \"notBreaching\", \"EvaluateLowSampleCountPercentile\": \"\", \"Dimensions\": \"\", \"StatisticType\": \"Statistic\", \"Statistic\": \"SUM\"}}",
+        "html_part": null
+    },
+    "Timestamp": "2026-09-26T06:57:10"
+}

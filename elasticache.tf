@@ -17,7 +17,7 @@ resource "aws_elasticache_replication_group" "main" {
   node_type      = var.redis_node_type
   port           = var.redis_port
 
-  num_cache_clusters         = 2
+  num_cache_clusters         = var.redis_num_cache_clusters
   automatic_failover_enabled = true
   multi_az_enabled           = true
 
@@ -51,10 +51,4 @@ resource "aws_ssm_parameter" "redis_port" {
   name  = local.redis_port_param
   type  = "String"
   value = tostring(aws_elasticache_replication_group.main.port)
-}
-
-resource "aws_ssm_parameter" "redis_auth_token" {
-  name  = local.redis_auth_token_param
-  type  = "SecureString"
-  value = random_password.redis_auth.result
 }

@@ -141,6 +141,14 @@ curl -i http://<ALB_DNS_NAME>/api/payments
 
 ---
 
+## S3 (File storage)
+- One bucket shared by both services: `order/` and `payment/` prefixes
+- Versioning: Enabled. Encryption: SSE-S3 (AES256). Public access: fully blocked (4/4 block settings).
+- Bucket policy: deny any request that isn't over HTTPS (`aws:SecureTransport = false`).
+- Lifecycle: STANDARD_IA_after `var.s3_glacier_transition_days` days, GLACIER after `var.s3_glacier_transition_days` days, noncurrent versions deleted after `var.s3_noncurrent_version_expiration_days` days
+- IAM: the EC2 shared role (`microservices-ec2-role`) gets `s3:GetObject`/`PutObject`/`DeleteObject` scoped to only  `orders/*` and `payments/` - not `AmazonS3FullAccess`.
+
+
 ## Deploy (PowerShell)
 
 1. Change into this folder:
@@ -257,6 +265,51 @@ curl -I https://www.google.com > nat_proof.txt
 |---------------------- |-----------------------------------------------------------|
 | redis-cli inside ec2  | ![redis-cli](pictures_proof/redis-cli-inside-ec2.png)     |
 | app logs (rds + redis)| ![redis-cli](pictures_proof/ec2_logs_redis_rds_proof.png) |
+
+
+### S3 — upload/download via EC2, presigned URL, versioning
+
+1. Connect to EC2 via SSM (replace with the real instance id):
+
+```powershell
+aws ssm start-session --target i-xxxxxxxxxxxx
+```
+
+2. Inside the session, test upload/download (the EC2 role is only allowed on orders/*, payments/*):
+
+```bash
+echo "test receipt" > /tmp/receipt.txt
+aws s3 cp /tmp/receipt.txt s3://<s3_bucket_name output>/orders/order-001/receipt.txt
+aws s3 cp s3://<s3_bucket_name output>/orders/order-001/receipt.txt /tmp/receipt-downloaded.txt
+cat /tmp/receipt-downloaded.txt
+```
+
+3. Verify access is denied outside the allowed prefixes (should fail — proves least-privilege works):
+
+```bash
+aws s3 cp /tmp/receipt.txt s3://<s3_bucket_name output>/uploads/should-fail.txt
+# Expect: An error occurred (AccessDenied)
+```
+
+4. Verify versioning (upload the same key twice, list versions):
+
+```bash
+echo "v1" > /tmp/receipt.txt && aws s3 cp /tmp/receipt.txt s3://<bucket>/orders/order-001/receipt.txt
+echo "v2" > /tmp/receipt.txt && aws s3 cp /tmp/receipt.txt s3://<bucket>/orders/order-001/receipt.txt
+aws s3api list-object-versions --bucket <bucket> --prefix orders/order-001/receipt.txt
+```
+
+5. Generate a presigned URL (run from a machine with permissions, valid 30 min) and verify it downloads without AWS credentials:
+
+```bash
+aws s3 presign s3://<bucket>/orders/order-001/receipt.txt --expires-in 1800
+curl -o receipt-via-presigned.txt "<generated url>"
+```
+
+| Claim | Proof |
+|---|---|
+| EC2 and S3 | ![ec2 - s3](pictures_proof/ec2_access_s3.png) |
+| Versioning keeps both versions | ![ec2 - s3](pictures_proof/s3_versioning.png) |
 
 
 ---
